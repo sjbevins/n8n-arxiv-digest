@@ -1,0 +1,737 @@
+{
+  "name": "Arxiv Digest v10 - Claude API",
+  "description": "Automated daily arXiv paper digest with SPECTER2 semantic ranking and Claude AI summaries. After importing: (1) Create SMTP, Google Sheets OAuth2, and Anthropic API credentials in n8n, (2) Update the Read Subscribers node with your Google Sheet ID, (3) Update email nodes with your sender/recipient addresses, (4) Activate the workflow.",
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "10 5 * * *"
+            }
+          ]
+        }
+      },
+      "name": "Daily 5:05 AM Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        272,
+        208
+      ]
+    },
+    {
+      "parameters": {},
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        272,
+        416
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://flask-scraper:5680/health",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "name": "Check Flask Health",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        896,
+        176
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "flask-ok",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "ok",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Flask Ready?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1096,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "your-email@gmail.com",
+        "toEmail": "your-email@gmail.com",
+        "subject": "Research Digest FAILED - Flask Container Not Ready",
+        "html": "={{ '<html><body style=\"font-family: -apple-system, BlinkMacSystemFont, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;\"><div style=\"background: #dc3545; color: white; padding: 24px; border-radius: 12px; text-align: center; margin-bottom: 20px;\"><h1 style=\"margin: 0; color: white;\">Workflow Failed</h1></div><div style=\"background: #f8f9fa; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;\"><h2 style=\"color: #dc3545; margin-top: 0;\">Flask Scraper Container Not Available</h2><p>The flask-scraper Docker container is not responding on port 5680.</p><h3>Troubleshooting:</h3><ol><li>Check container exists: <code>docker ps -a --filter name=flask-scraper</code></li><li>Check container logs: <code>docker logs flask-scraper</code></li><li>Rebuild if needed: <code>docker compose build flask-scraper</code></li><li>Check Docker socket mount in n8n container</li></ol><p style=\"color: #666; margin-top: 20px;\">Attempted at: ' + new Date().toLocaleString() + '</p></div></body></html>' }}",
+        "options": {}
+      },
+      "name": "Send Flask Failure Alert",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1096,
+        400
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "Your ArXiv Digest Sheet",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID/edit#gid=0"
+        },
+        "options": {}
+      },
+      "name": "Read Subscribers",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1886,
+        0
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse subscribers from Google Sheets and extract all unique categories\nconst subscribers = items.map(item => {\n  const row = item.json;\n\n  // Find fields by checking multiple possible column names\n  const findField = (obj, ...keys) => {\n    // First try exact matches\n    for (const k of keys) {\n      if (obj[k] !== undefined) return obj[k];\n    }\n    // Then try case-insensitive partial matches\n    const objKeys = Object.keys(obj);\n    for (const k of keys) {\n      const lower = k.toLowerCase();\n      const match = objKeys.find(ok => ok.toLowerCase().includes(lower));\n      if (match && obj[match] !== undefined) return obj[match];\n    }\n    return '';\n  };\n\n  const name = String(findField(row, 'Name', 'name')).trim();\n  const email = String(findField(row, 'Email', 'email')).trim();\n  const keywords = String(findField(row, 'Keywords', 'keywords')).trim();\n  const categoriesRaw = String(findField(row, 'Categories', 'categories', 'ArXiv Categories')).trim();\n  const status = String(findField(row, 'Status', 'status')).trim().toLowerCase();\n\n  return {\n    name,\n    email,\n    keywords,\n    categories: categoriesRaw.split(',').map(c => c.trim()).filter(Boolean),\n    status,\n  };\n});\n\n// Filter active users\nconst activeSubscribers = subscribers.filter(s =>\n  s.status === 'active' && s.email && s.keywords && s.categories.length > 0\n);\n\nif (activeSubscribers.length === 0) {\n  return [{\n    json: {\n      error: 'No active subscribers found in Google Sheet',\n      subscribers: [],\n      allCategories: [],\n    }\n  }];\n}\n\n// Collect all unique categories across all active subscribers\nconst allCategories = [...new Set(activeSubscribers.flatMap(s => s.categories))];\n\nreturn [{\n  json: {\n    subscribers: activeSubscribers,\n    allCategories: allCategories,\n    subscriberCount: activeSubscribers.length,\n    workflowStartTime: Date.now(),\n  }\n}];"
+      },
+      "name": "Parse Subscribers & Categories",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2094,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://flask-scraper:5680/scrape",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ '{\"categories\":' + JSON.stringify($('Parse Subscribers & Categories').first().json.allCategories || []) + '}' }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 600000
+        }
+      },
+      "name": "Scrape All Categories",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2318,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const scrapeResponse = items[0].json;\nconst subscriberData = $('Parse Subscribers & Categories').first().json;\n\nconst totalPapers = scrapeResponse.total_unique_papers || 0;\nconst hasError = !!scrapeResponse.error;\nconst noPapers = hasError || totalPapers === 0;\n\nreturn [{\n  json: {\n    noPapers: noPapers,\n    errorMessage: hasError ? ('Scrape error: ' + scrapeResponse.error) : (noPapers ? 'No papers found in any RSS feed' : ''),\n    scrapeMetrics: scrapeResponse.metrics || {},\n    papersByCategory: scrapeResponse.papers_by_category || {},\n    totalUniquePapers: totalPapers,\n    subscribers: subscriberData.subscribers || [],\n    subscriberCount: subscriberData.subscriberCount || 0,\n    allCategories: subscriberData.allCategories || [],\n    workflowStartTime: subscriberData.workflowStartTime || Date.now(),\n  }\n}];"
+      },
+      "name": "Parse Scrape Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2542,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Split subscribers into individual items for the person loop\n// If no papers were found, return empty array (Person Loop skips to done)\nconst data = items[0].json;\n\nif (data.noPapers) {\n  // Return empty - Person Loop will immediately go to \"done\" output\n  return [];\n}\n\nconst subscribers = data.subscribers || [];\nreturn subscribers.map(sub => ({\n  json: {\n    person: sub,\n    scrapeMetrics: data.scrapeMetrics,\n    papersByCategory: data.papersByCategory,\n    totalUniquePapers: data.totalUniquePapers,\n    workflowStartTime: data.workflowStartTime,\n  }\n}));"
+      },
+      "name": "Split Into Subscribers",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2766,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "name": "Person Loop",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        2990,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://flask-scraper:5680/score",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ '{\"keywords\":' + JSON.stringify($json.person.keywords) + ',\"categories\":' + JSON.stringify($json.person.categories) + ',\"top_n\":10}' }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "name": "Score Papers for Person",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3230,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const scoreResponse = items[0].json;\nconst personData = $('Person Loop').first().json;\nconst person = personData.person;\nconst scrapeMetrics = personData.scrapeMetrics;\nconst workflowStartTime = personData.workflowStartTime;\n\nconst papers = scoreResponse.papers || [];\nconst totalInCategories = scoreResponse.total_in_categories || 0;\n\nif (papers.length === 0) {\n  // No papers for this person - return empty to skip to next person\n  return [];\n}\n\nreturn [{\n  json: {\n    person: person,\n    papers: papers,\n    totalInCategories: totalInCategories,\n    scoringTime: scoreResponse.scoring_time,\n    scrapeMetrics: scrapeMetrics,\n    totalUniquePapers: personData.totalUniquePapers,\n    workflowStartTime: workflowStartTime,\n  }\n}];"
+      },
+      "name": "Parse Score Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3454,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Split the scored papers into individual items for LLM summarization\nconst data = items[0].json;\nconst papers = data.papers || [];\n\nreturn papers.map(paper => ({\n  json: {\n    ...paper,\n    person: data.person,\n    scrapeMetrics: data.scrapeMetrics,\n    totalInCategories: data.totalInCategories,\n    totalUniquePapers: data.totalUniquePapers,\n    workflowStartTime: data.workflowStartTime,\n  }\n}));"
+      },
+      "name": "Split Person Papers",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3662,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const paper = $json;\nconst person = paper.person;\n\nconst relevancePercent = (paper.relevance_score * 100).toFixed(1);\n\nconst prompt = `Summarize this scientific paper. First provide a brief 2-3 sentence overview, then detailed bullet points.\nThis summary is for ${person.name}, whose research interests include: ${person.keywords}\n\n**OUTPUT FORMAT (use exactly this structure):**\n\n[Write a 2-3 sentence paragraph that gives a plain-language overview of the paper's main contribution, methodology, and key finding. This should provide a quick snapshot for a busy researcher. Do NOT use a heading for this paragraph.]\n\n- **Key Result:** [One sentence: the main finding or contribution]\n- **Method:** [One sentence: the approach or technique used]\n- **Findings:**\n  - [Specific result 1 with numbers if available]\n  - [Specific result 2]\n  - [Specific result 3 if applicable]\n- **Relevance to ${person.name}:** [One sentence: how this connects to their research interests]\n\n---\n\n**Title:** ${paper.title}\n\n**Abstract:** ${paper.abstract}\n\n**Relevance Score:** ${relevancePercent}% (cosine similarity to research keywords)\n\n---\n\n**RULES:**\n- Start with the overview paragraph (2-3 sentences, no heading, just plain text)\n- Leave a blank line between the paragraph and the bullet points\n- Then list the bullet points using \"- \" prefix (dash + space)\n- Be specific and technical, not generic\n- Include quantitative results when available (thresholds, scaling, percentages)\n- Maximum 200 words total (paragraph + bullets combined)\n- Use \"- \" for all bullets, not bullet symbols\n- The \"Relevance\" bullet should directly mention specific keywords from the person's interests`;\n\nreturn {\n  json: {\n    ...paper,\n    chatInput: prompt\n  }\n};"
+      },
+      "name": "Prepare Personalized LLM Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3870,
+        0
+      ]
+    },
+    {
+      "parameters": {},
+      "name": "Summarize Paper",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.5,
+      "position": [
+        4062,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const originalPapers = $('Prepare Personalized LLM Prompt').all();\nconst person = originalPapers[0]?.json?.person || {};\n\nconst processedPapers = items.map((item, index) => {\n  const original = originalPapers[index]?.json || {};\n\n  return {\n    rank: original.rank || index + 1,\n    title: original.title || 'Untitled',\n    authors: original.authors || 'Unknown',\n    abstract: original.abstract || '',\n    link: original.link || '#',\n    pdfLink: original.pdf_link || '#',\n    llmSummary: item.json.text || item.json.output || 'Summary not available',\n    relevanceScore: original.relevance_score || 0,\n    published: original.published || '',\n    updated: original.updated || '',\n    pages: original.pages,\n    readingTimeMin: original.reading_time_min,\n    arxivId: original.arxiv_id || '',\n    comment: original.comment || '',\n    categories: original.categories || [],\n  };\n});\n\nprocessedPapers.sort((a, b) => a.rank - b.rank);\n\nconst scrapeMetrics = originalPapers[0]?.json?.scrapeMetrics || {};\nconst workflowStartTime = parseInt(originalPapers[0]?.json?.workflowStartTime) || Date.now();\nconst totalInCategories = originalPapers[0]?.json?.totalInCategories || 0;\nconst totalUniquePapers = originalPapers[0]?.json?.totalUniquePapers || 0;\n\nreturn [{\n  json: {\n    papers: processedPapers,\n    person: person,\n    scrapeMetrics: scrapeMetrics,\n    totalInCategories: totalInCategories,\n    totalUniquePapers: totalUniquePapers,\n    workflowStartTime: workflowStartTime,\n    summaryCompleteTime: Date.now(),\n  }\n}];"
+      },
+      "name": "Collect Summaries",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4382,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = items[0].json;\nconst papers = data.papers || [];\nconst person = data.person || {};\nconst scrapeMetrics = data.scrapeMetrics || {};\nconst workflowStartTime = parseInt(data.workflowStartTime) || Date.now();\nconst summaryCompleteTime = data.summaryCompleteTime || Date.now();\nconst totalInCategories = data.totalInCategories || 0;\nconst totalUniquePapers = data.totalUniquePapers || 0;\n\nconst endTime = Date.now();\nconst totalWorkflowMs = endTime - workflowStartTime;\nconst summaryTimeMs = summaryCompleteTime - workflowStartTime - ((scrapeMetrics.total_time || 0) * 1000);\n\nconst formatTime = (ms) => {\n  if (!ms || ms < 0) return '?';\n  const min = Math.floor(ms / 60000);\n  const sec = Math.floor((ms % 60000) / 1000);\n  return min > 0 ? `${min}m ${sec}s` : `${sec}s`;\n};\n\nconst formatSeconds = (s) => {\n  if (!s || s < 0) return '?';\n  const min = Math.floor(s / 60);\n  const sec = Math.round(s % 60);\n  return min > 0 ? `${min}m ${sec}s` : `${sec}s`;\n};\n\nconst today = new Date().toLocaleDateString('en-US', {\n  weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'\n});\n\nconst keywordsList = person.keywords ? person.keywords.split(',').map(k => k.trim()).filter(Boolean) : [];\nconst categoriesList = person.categories || [];\n\nlet html = `<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n  <meta name=\"color-scheme\" content=\"light dark\">\n  <title>Research Daily Digest</title>\n  <style>\n    :root { color-scheme: light dark; }\n    * { box-sizing: border-box; }\n    body {\n      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;\n      line-height: 1.6;\n      color: #1a1a1a;\n      max-width: 700px;\n      margin: 0 auto;\n      padding: 16px;\n      background-color: #ffffff;\n    }\n    @media (prefers-color-scheme: dark) {\n      body { background-color: #1a1a1a !important; color: #e0e0e0 !important; }\n      .section { background-color: #2d2d2d !important; border-color: #444 !important; }\n      .paper { background-color: #363636 !important; }\n      .section-title { color: #7cb3d9 !important; border-bottom-color: #444 !important; }\n      .paper-title a { color: #7cb3d9 !important; }\n      .metric-card { background-color: #2d3748 !important; }\n      .metric-value { color: #90cdf4 !important; }\n      .paper-summary { background-color: #2a2a2a !important; }\n      .paper-overview { color: #bbb !important; border-bottom-color: #555 !important; }\n      .keyword-tag { background-color: #2d3748 !important; color: #90cdf4 !important; }\n      .category-badge { background-color: #2d3748 !important; color: #90cdf4 !important; }\n    }\n    .header {\n      background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%);\n      color: #ffffff;\n      padding: 24px 20px;\n      border-radius: 12px;\n      margin-bottom: 20px;\n      text-align: center;\n    }\n    .header h1 {\n      margin: 0 0 4px 0;\n      font-size: 24px;\n      font-weight: 600;\n      color: #ffffff;\n    }\n    .header .personalized {\n      font-size: 15px;\n      color: #b8d4e8;\n      margin-bottom: 6px;\n    }\n    .header .date {\n      font-size: 14px;\n      color: #ccd9e6;\n    }\n    .profile-section {\n      background-color: #f0f4f8;\n      border-radius: 8px;\n      padding: 14px 16px;\n      margin-bottom: 16px;\n      font-size: 13px;\n      line-height: 1.5;\n    }\n    .profile-section strong { color: #1e3a5f; }\n    .keyword-tag {\n      display: inline-block;\n      background-color: #e8f4f8;\n      color: #1e3a5f;\n      font-size: 11px;\n      padding: 2px 8px;\n      border-radius: 10px;\n      margin: 2px 3px 2px 0;\n    }\n    .category-badge {\n      display: inline-block;\n      background-color: #d4edda;\n      color: #155724;\n      font-size: 11px;\n      font-weight: 600;\n      padding: 2px 8px;\n      border-radius: 10px;\n      margin: 2px 3px 2px 0;\n    }\n    .metrics-grid {\n      display: grid;\n      grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));\n      gap: 10px;\n      margin: 16px 0;\n    }\n    .metric-card {\n      background-color: #f0f4f8;\n      border-radius: 8px;\n      padding: 12px 8px;\n      text-align: center;\n    }\n    .metric-value {\n      font-size: 22px;\n      font-weight: 700;\n      color: #1e3a5f;\n      margin-bottom: 2px;\n    }\n    .metric-label {\n      font-size: 10px;\n      color: #666;\n      text-transform: uppercase;\n      letter-spacing: 0.5px;\n    }\n    .section {\n      background-color: #f8f9fa;\n      border-radius: 8px;\n      padding: 20px;\n      margin-bottom: 16px;\n      border: 1px solid #e0e0e0;\n    }\n    .section-title {\n      font-size: 18px;\n      font-weight: 600;\n      color: #1e3a5f;\n      margin: 0 0 16px 0;\n      padding-bottom: 8px;\n      border-bottom: 2px solid #e0e0e0;\n    }\n    .paper {\n      border-left: 4px solid #2d5a87;\n      padding: 16px;\n      margin-bottom: 20px;\n      background-color: #ffffff;\n      border-radius: 0 8px 8px 0;\n    }\n    .paper:last-child { margin-bottom: 0; }\n    .paper-rank {\n      display: inline-flex;\n      align-items: center;\n      justify-content: center;\n      background: linear-gradient(135deg, #2d5a87 0%, #1e3a5f 100%);\n      color: #ffffff;\n      width: 28px;\n      height: 28px;\n      border-radius: 50%;\n      font-size: 13px;\n      font-weight: 700;\n      margin-right: 10px;\n      flex-shrink: 0;\n    }\n    .paper-header {\n      display: flex;\n      align-items: flex-start;\n      margin-bottom: 8px;\n    }\n    .paper-title {\n      font-size: 15px;\n      font-weight: 600;\n      line-height: 1.4;\n    }\n    .paper-title a {\n      color: #2d5a87;\n      text-decoration: none;\n    }\n    .paper-title a:hover { text-decoration: underline; }\n    .paper-meta {\n      font-size: 13px;\n      color: #666;\n      margin-bottom: 10px;\n      line-height: 1.5;\n    }\n    .paper-meta-row { margin-bottom: 4px; }\n    .paper-meta strong { color: #444; }\n    .paper-links { margin-bottom: 10px; }\n    .paper-links a {\n      display: inline-block;\n      font-size: 12px;\n      color: #2d5a87;\n      text-decoration: none;\n      margin-right: 12px;\n      padding: 4px 10px;\n      background-color: #e8f4f8;\n      border-radius: 4px;\n    }\n    .paper-links a:hover { background-color: #d0e8f0; }\n    .paper-summary {\n      font-size: 14px;\n      color: #333;\n      line-height: 1.6;\n      background-color: #fafafa;\n      padding: 12px;\n      border-radius: 6px;\n      margin-top: 10px;\n    }\n    .paper-summary strong { color: #1e3a5f; }\n    .paper-overview {\n      font-style: italic;\n      color: #444;\n      margin-bottom: 10px;\n      padding-bottom: 8px;\n      border-bottom: 1px dashed #ddd;\n      line-height: 1.6;\n    }\n    .relevance-badge {\n      display: inline-block;\n      background-color: #d4edda;\n      color: #155724;\n      font-size: 11px;\n      font-weight: 600;\n      padding: 2px 8px;\n      border-radius: 12px;\n      margin-left: 8px;\n    }\n    .footer {\n      text-align: center;\n      color: #888;\n      font-size: 12px;\n      padding: 20px;\n      border-top: 1px solid #e0e0e0;\n      margin-top: 20px;\n    }\n    @media (max-width: 480px) {\n      body { padding: 12px; }\n      .header { padding: 20px 16px; }\n      .header h1 { font-size: 20px; }\n      .metrics-grid { grid-template-columns: repeat(3, 1fr); }\n      .section { padding: 16px; }\n      .paper { padding: 12px; }\n    }\n  </style>\n</head>\n<body style=\"font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;line-height:1.6;color:#1a1a1a;max-width:700px;margin:0 auto;padding:16px;background-color:#ffffff;\">\n  <div class=\"header\" style=\"background:linear-gradient(135deg,#1e3a5f 0%,#2d5a87 100%);color:#ffffff;padding:24px 20px;border-radius:12px;margin-bottom:20px;text-align:center;\">\n    <h1 style=\"color:#ffffff;margin:0 0 4px 0;\">Research Daily Digest</h1>\n    <div class=\"personalized\" style=\"color:#b8d4e8;\">Personalized for ${person.name}</div>\n    <div class=\"date\" style=\"color:#ccd9e6;\">${today}</div>\n  </div>\n\n  <div class=\"profile-section\" style=\"background-color:#f0f4f8;border-radius:8px;padding:14px 16px;margin-bottom:16px;font-size:13px;line-height:1.5;\">\n    <strong style=\"color:#1e3a5f;\">Categories:</strong> ${categoriesList.map(c => '<span class=\"category-badge\" style=\"display:inline-block;background-color:#d4edda;color:#155724;font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;margin:2px 3px 2px 0;\">' + c + '</span>').join(' ')}<br>\n    <strong style=\"color:#1e3a5f;\">Keywords:</strong> ${keywordsList.slice(0, 10).map(k => '<span class=\"keyword-tag\" style=\"display:inline-block;background-color:#e8f4f8;color:#1e3a5f;font-size:11px;padding:2px 8px;border-radius:10px;margin:2px 3px 2px 0;\">' + k + '</span>').join(' ')}${keywordsList.length > 10 ? ' <span style=\"color:#888;\">+' + (keywordsList.length - 10) + ' more</span>' : ''}\n  </div>\n\n  <div class=\"metrics-grid\" style=\"display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:10px;margin:16px 0;\">\n    <div class=\"metric-card\" style=\"background-color:#f0f4f8;border-radius:8px;padding:12px 8px;text-align:center;\">\n      <div class=\"metric-value\" style=\"font-size:22px;font-weight:700;color:#1e3a5f;margin-bottom:2px;\">${totalUniquePapers || '?'}</div>\n      <div class=\"metric-label\" style=\"font-size:10px;color:#666;text-transform:uppercase;letter-spacing:0.5px;\">Published</div>\n    </div>\n    <div class=\"metric-card\" style=\"background-color:#f0f4f8;border-radius:8px;padding:12px 8px;text-align:center;\">\n      <div class=\"metric-value\" style=\"font-size:22px;font-weight:700;color:#1e3a5f;margin-bottom:2px;\">${totalInCategories}</div>\n      <div class=\"metric-label\" style=\"font-size:10px;color:#666;text-transform:uppercase;letter-spacing:0.5px;\">In Your Categories</div>\n    </div>\n    <div class=\"metric-card\" style=\"background-color:#f0f4f8;border-radius:8px;padding:12px 8px;text-align:center;\">\n      <div class=\"metric-value\" style=\"font-size:22px;font-weight:700;color:#1e3a5f;margin-bottom:2px;\">${papers.length}</div>\n      <div class=\"metric-label\" style=\"font-size:10px;color:#666;text-transform:uppercase;letter-spacing:0.5px;\">Top Papers</div>\n    </div>\n    <div class=\"metric-card\" style=\"background-color:#f0f4f8;border-radius:8px;padding:12px 8px;text-align:center;\">\n      <div class=\"metric-value\" style=\"font-size:22px;font-weight:700;color:#1e3a5f;margin-bottom:2px;\">${formatSeconds(scrapeMetrics.total_time)}</div>\n      <div class=\"metric-label\" style=\"font-size:10px;color:#666;text-transform:uppercase;letter-spacing:0.5px;\">Scraper</div>\n    </div>\n    <div class=\"metric-card\" style=\"background-color:#f0f4f8;border-radius:8px;padding:12px 8px;text-align:center;\">\n      <div class=\"metric-value\" style=\"font-size:22px;font-weight:700;color:#1e3a5f;margin-bottom:2px;\">${formatTime(summaryTimeMs)}</div>\n      <div class=\"metric-label\" style=\"font-size:10px;color:#666;text-transform:uppercase;letter-spacing:0.5px;\">Summary</div>\n    </div>\n    <div class=\"metric-card\" style=\"background-color:#f0f4f8;border-radius:8px;padding:12px 8px;text-align:center;\">\n      <div class=\"metric-value\" style=\"font-size:22px;font-weight:700;color:#1e3a5f;margin-bottom:2px;\">${formatTime(totalWorkflowMs)}</div>\n      <div class=\"metric-label\" style=\"font-size:10px;color:#666;text-transform:uppercase;letter-spacing:0.5px;\">Total</div>\n    </div>\n  </div>\n\n  <div class=\"section\" style=\"background-color:#f8f9fa;border-radius:8px;padding:20px;margin-bottom:16px;border:1px solid #e0e0e0;\">\n    <h2 class=\"section-title\" style=\"font-size:18px;font-weight:600;color:#1e3a5f;margin:0 0 16px 0;padding-bottom:8px;border-bottom:2px solid #e0e0e0;\">Top ${papers.length} Most Relevant Papers</h2>\n    <p style=\"font-size:14px;color:#666;margin:0 0 20px 0;\">\n      Ranked by SPECTER2 semantic similarity to your research keywords.\n      Scored from ${totalInCategories} papers across ${categoriesList.join(', ')}.\n    </p>`;\n\nfor (const paper of papers) {\n  // Split overview paragraph from bullet points\n  const rawLines = paper.llmSummary.split('\\n');\n  let paragraphParts = [];\n  let bulletParts = [];\n  let foundBullet = false;\n  \n  for (const ln of rawLines) {\n    const t = ln.trim();\n    if (!foundBullet && (t.startsWith('- **') || t.startsWith('* **') || /^\\u2022/.test(t))) {\n      foundBullet = true;\n    }\n    if (foundBullet) {\n      bulletParts.push(ln);\n    } else if (t.length > 0) {\n      paragraphParts.push(ln);\n    }\n  }\n  \n  const overviewHtml = paragraphParts.join(' ')\n    .replace(/\\*\\*([^*]+)\\*\\*/g, '<strong style=\"color:#1e3a5f;\">$1</strong>');\n  \n  const bulletsHtml = bulletParts.join('\\n')\n    .replace(/\\*\\*([^*]+)\\*\\*/g, '<strong style=\"color:#1e3a5f;\">$1</strong>')\n    .replace(/^[\\u2022\\-\\*]\\s*/gm, '&bull; ')\n    .replace(/\\n/g, '<br>');\n\n  const publishedDate = paper.published ?\n    new Date(paper.published).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) :\n    'Unknown';\n\n  const pageInfo = paper.pages ? `${paper.pages} pages` : 'Pages N/A';\n  const readTime = paper.readingTimeMin ? `~${paper.readingTimeMin} min read` : '';\n  const readInfo = [pageInfo, readTime].filter(Boolean).join(' &middot; ');\n\n  const relevancePercent = (paper.relevanceScore * 100).toFixed(1);\n\n  const catBadges = (paper.categories || []).map(c => '<span class=\"category-badge\" style=\"display:inline-block;background-color:#d4edda;color:#155724;font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;margin:2px 3px 2px 0;\">' + c + '</span>').join(' ');\n\n  html += `\n    <div class=\"paper\" style=\"border-left:4px solid #2d5a87;padding:16px;margin-bottom:20px;background-color:#ffffff;border-radius:0 8px 8px 0;\">\n      <div class=\"paper-header\" style=\"display:flex;align-items:flex-start;margin-bottom:8px;\">\n        <span class=\"paper-rank\" style=\"display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#2d5a87 0%,#1e3a5f 100%);color:#ffffff;width:28px;height:28px;border-radius:50%;font-size:13px;font-weight:700;margin-right:10px;flex-shrink:0;\">${paper.rank}</span>\n        <div class=\"paper-title\" style=\"font-size:15px;font-weight:600;line-height:1.4;\">\n          <a href=\"${paper.link}\" target=\"_blank\" style=\"color:#2d5a87;text-decoration:none;\">${paper.title}</a>\n          <span class=\"relevance-badge\" style=\"display:inline-block;background-color:#d4edda;color:#155724;font-size:11px;font-weight:600;padding:2px 8px;border-radius:12px;margin-left:8px;\">${relevancePercent}%</span>\n        </div>\n      </div>\n      <div class=\"paper-meta\" style=\"font-size:13px;color:#666;margin-bottom:10px;line-height:1.5;\">\n        <div class=\"paper-meta-row\" style=\"margin-bottom:4px;\"><strong style=\"color:#444;\">Authors:</strong> ${paper.authors}</div>\n        <div class=\"paper-meta-row\" style=\"margin-bottom:4px;\"><strong style=\"color:#444;\">Published:</strong> ${publishedDate} &middot; <strong style=\"color:#444;\">arXiv:</strong> ${paper.arxivId} ${catBadges}</div>\n        <div class=\"paper-meta-row\" style=\"margin-bottom:4px;\"><strong style=\"color:#444;\">Length:</strong> ${readInfo}</div>\n      </div>\n      <div class=\"paper-links\" style=\"margin-bottom:10px;\">\n        <a href=\"${paper.link}\" target=\"_blank\" style=\"display:inline-block;font-size:12px;color:#2d5a87;text-decoration:none;margin-right:12px;padding:4px 10px;background-color:#e8f4f8;border-radius:4px;\">Abstract</a>\n        <a href=\"${paper.pdfLink}\" target=\"_blank\" style=\"display:inline-block;font-size:12px;color:#2d5a87;text-decoration:none;padding:4px 10px;background-color:#e8f4f8;border-radius:4px;\">PDF</a>\n      </div>\n      <div class=\"paper-summary\" style=\"font-size:14px;color:#333;line-height:1.6;background-color:#fafafa;padding:12px;border-radius:6px;margin-top:10px;\">${overviewHtml ? '<div class=\"paper-overview\" style=\"font-style:italic;color:#444;margin-bottom:10px;padding-bottom:8px;border-bottom:1px dashed #ddd;line-height:1.6;\">' + overviewHtml + '</div>' : ''}${bulletsHtml}</div>\n    </div>`;\n}\n\nhtml += `\n  </div>\n\n  <div class=\"footer\" style=\"text-align:center;color:#888;font-size:12px;padding:20px;border-top:1px solid #e0e0e0;margin-top:20px;\">\n    <p><strong>Arxiv Research Daily Digest v10</strong></p>\n    <p>Semantic ranking: SPECTER2 (CPU) | Summaries: Claude Haiku 4.5 | Paragraph + Bullets | Inline Styles</p>\n    <p style=\"font-size:11px;color:#aaa;\">\n      Papers scanned: ${totalUniquePapers || '?'} &middot;\n      Your categories: ${categoriesList.join(', ')} &middot;\n      Total time: ${formatTime(totalWorkflowMs)}\n    </p>\n  </div>\n</body>\n</html>`;\n\nreturn [{\n  json: {\n    newsletterHtml: html,\n    subject: `Research Digest - ${today} (Top ${papers.length} for ${person.name})`,\n    person: person,\n    paperCount: papers.length,\n    totalInCategories: totalInCategories,\n  }\n}];"
+      },
+      "name": "Format Personalized Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4574,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "your-email@gmail.com",
+        "toEmail": "={{ $json.person.email }}",
+        "subject": "={{ $json.subject }}",
+        "html": "={{ $json.newsletterHtml }}",
+        "options": {}
+      },
+      "name": "Send Personalized Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        4766,
+        0
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://flask-scraper:5680/cleanup",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "name": "Cleanup Cache",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3230,
+        -192
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "content": "",
+        "height": 80,
+        "width": 512
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1118,
+        -896
+      ],
+      "typeVersion": 1,
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "Fix the HTML to work in the light mode on outlook",
+        "height": 96,
+        "width": 150
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        4414,
+        -896
+      ],
+      "typeVersion": 1,
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "Remove est. read time",
+        "height": 80,
+        "width": 150
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        4062,
+        -896
+      ],
+      "typeVersion": 1,
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "command": "node -e \"const h=require('http'),r=h.request({socketPath:'/var/run/docker.sock',path:'/containers/flask-scraper/start',method:'POST'},s=>{let d='';s.on('data',c=>d+=c);s.on('end',()=>{if(s.statusCode===204||s.statusCode===304)console.log(s.statusCode===204?'Started':'Already running');else{console.error('Error:',s.statusCode,d);process.exit(1)}})});r.on('error',e=>{console.error(e.message);process.exit(1)});r.end()\""
+      },
+      "id": "start-flask-container",
+      "name": "Start Flask Container",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        496,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 15
+      },
+      "id": "wait-flask-startup",
+      "name": "Wait for Flask Startup",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        696,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "command": "node -e \"const h=require('http'),r=h.request({socketPath:'/var/run/docker.sock',path:'/containers/flask-scraper/stop',method:'POST'},s=>{let d='';s.on('data',c=>d+=c);s.on('end',()=>{if(s.statusCode===204||s.statusCode===304)console.log(s.statusCode===204?'Stopped':'Already stopped');else console.log('Warning:',s.statusCode,d)})});r.on('error',e=>console.error(e.message));r.end()\""
+      },
+      "id": "stop-flask-container",
+      "name": "Stop Flask Container",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        3674,
+        -192
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "content": "## v9: Docker Flask Auto-Management\n- **Start Flask Container**: Calls Docker socket API to start flask-scraper\n- **Wait 15s**: Let Flask fully initialize\n- **Stop Flask Container**: Shuts down flask-scraper after cleanup\n\nRequires: Docker socket mounted in n8n container\n(`/var/run/docker.sock:/var/run/docker.sock` in docker-compose.yml)",
+        "width": 400,
+        "height": 200
+      },
+      "name": "Sticky Note3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        880,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "claude-haiku-4-5-20251001",
+          "mode": "list",
+          "cachedResultName": "Claude Haiku 4.5"
+        },
+        "options": {}
+      },
+      "name": "Claude Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        4062,
+        256
+      ],
+      "credentials": {
+        "anthropicApi": {
+          "id": "",
+          "name": "Anthropic API"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Daily 5:05 AM Trigger": {
+      "main": [
+        [
+          {
+            "node": "Start Flask Container",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Start Flask Container",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Flask Health": {
+      "main": [
+        [
+          {
+            "node": "Flask Ready?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Flask Ready?": {
+      "main": [
+        [
+          {
+            "node": "Read Subscribers",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Flask Failure Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Subscribers": {
+      "main": [
+        [
+          {
+            "node": "Parse Subscribers & Categories",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Subscribers & Categories": {
+      "main": [
+        [
+          {
+            "node": "Scrape All Categories",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape All Categories": {
+      "main": [
+        [
+          {
+            "node": "Parse Scrape Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Scrape Response": {
+      "main": [
+        [
+          {
+            "node": "Split Into Subscribers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Into Subscribers": {
+      "main": [
+        [
+          {
+            "node": "Person Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Person Loop": {
+      "main": [
+        [
+          {
+            "node": "Cleanup Cache",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Score Papers for Person",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Score Papers for Person": {
+      "main": [
+        [
+          {
+            "node": "Parse Score Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Score Response": {
+      "main": [
+        [
+          {
+            "node": "Split Person Papers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Person Papers": {
+      "main": [
+        [
+          {
+            "node": "Prepare Personalized LLM Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Personalized LLM Prompt": {
+      "main": [
+        [
+          {
+            "node": "Summarize Paper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarize Paper": {
+      "main": [
+        [
+          {
+            "node": "Collect Summaries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Summaries": {
+      "main": [
+        [
+          {
+            "node": "Format Personalized Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Personalized Email": {
+      "main": [
+        [
+          {
+            "node": "Send Personalized Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Personalized Email": {
+      "main": [
+        [
+          {
+            "node": "Person Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cleanup Cache": {
+      "main": [
+        [
+          {
+            "node": "Stop Flask Container",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start Flask Container": {
+      "main": [
+        [
+          {
+            "node": "Wait for Flask Startup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for Flask Startup": {
+      "main": [
+        [
+          {
+            "node": "Check Flask Health",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Summarize Paper",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/New_York",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  },
+  "staticData": {
+    "node:Daily 5:05 AM Trigger": {
+      "recurrenceRules": []
+    }
+  },
+  "pinData": {},
+  "triggerCount": 1,
+  "tags": []
+}

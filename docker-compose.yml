@@ -1,0 +1,39 @@
+services:
+  n8n:
+    image: n8nio/n8n
+    container_name: n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=${N8N_BASIC_AUTH_USER}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD}
+      - N8N_SECURE_COOKIE=false
+      - N8N_PUBLIC_API_ENABLED=true
+      - GENERIC_TIMEZONE=${TZ}
+      - TZ=${TZ}
+      - NODES_EXCLUDE=[]
+      - WEBHOOK_URL=${WEBHOOK_URL}
+    group_add:
+      - "${DOCKER_GID}"
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  flask-scraper:
+    build:
+      context: .
+      dockerfile: Dockerfile.scraper
+    container_name: flask-scraper
+    restart: on-failure
+    ports:
+      - "5680:5680"
+    volumes:
+      - huggingface_cache:/root/.cache/huggingface
+    environment:
+      - TRANSFORMERS_CACHE=/root/.cache/huggingface
+
+volumes:
+  n8n_data:
+  huggingface_cache:

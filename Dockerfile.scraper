@@ -1,0 +1,19 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install Python dependencies
+RUN pip install --no-cache-dir \
+    flask \
+    feedparser \
+    requests \
+    numpy \
+    sentence-transformers \
+    arxiv
+
+# Copy scraper server
+COPY scraper_server_v2.py .
+
+EXPOSE 5680
+
+CMD ["python", "scraper_server_v2.py"]
