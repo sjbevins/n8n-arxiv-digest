@@ -92,36 +92,36 @@ arXiv provides a [built-in email alert service](https://info.arxiv.org/help/subs
   TRIGGER (Daily cron or manual)
       │
       ▼
-  ┌───────────────────┐     ┌───────────────────┐     ┌──────────────────┐
+  ┌────────────────────┐     ┌────────────────────┐     ┌──────────────────┐
   │  n8n Workflow      │     │  Flask Scraper     │     │  External APIs   │
   │  (Orchestrator)    │     │  (SPECTER2 + CPU)  │     │                  │
   │                    │     │                    │     │                  │
-  │ 1. Start Flask ────┼────▶│  Container starts  │     │                  │
+  │ 1. Start Flask ────┼────>│  Container starts  │     │                  │
   │    container       │     │                    │     │                  │
   │                    │     │                    │     │                  │
-  │ 2. Read subscriber─┼──────────────────────────┼────▶│  Google Sheets   │
-  │    list            │◀─────────────────────────┼─────│  (subscribers)   │
+  │ 2. Read subscriber─┼──────────────────────────┼────>│  Google Sheets   │
+  │    list            │<─────────────────────────┼─────│  (subscribers)   │
   │                    │     │                    │     │                  │
-  │ 3. Scrape papers ──┼────▶│  Fetch RSS feeds ──┼────▶│  arXiv RSS       │
-  │    (all categories)│     │  Fetch metadata  ──┼────▶│  arXiv API       │
-  │                    │◀────┼  Compute SPECTER2  │     │                  │
+  │ 3. Scrape papers ──┼───> │  Fetch RSS feeds ─┼─────>│  arXiv RSS       │
+  │    (all categories)│     │  Fetch metadata  ──┼────>│  arXiv API       │
+  │                    │<────┼  Compute SPECTER2  │     │                  │
   │                    │     │  embeddings (CPU)  │     │                  │
   │                    │     │                    │     │                  │
   │ 4. Per subscriber: │     │                    │     │                  │
-  │    Score papers ───┼────▶│  Cosine similarity │     │                  │
-  │    by keywords     │◀────┼  vs keyword embed  │     │                  │
+  │    Score papers ───┼────>│  Cosine similarity │     │                  │
+  │    by keywords     │<────┼  vs keyword embed  │     │                  │
   │                    │     │                    │     │                  │
-  │ 5. Summarize top ──┼──────────────────────────┼────▶│  LLM             │
-  │    papers          │◀─────────────────────────┼─────│  (Cloud or Local)│
+  │ 5. Summarize top ──┼──────────────────────────┼────>│  LLM             │
+  │    papers          │<─────────────────────────┼─────│  (Cloud or Local)│
   │                    │     │                    │     │                  │
   │ 6. Format HTML     │     │                    │     │                  │
   │    email digest    │     │                    │     │                  │
   │                    │     │                    │     │                  │
-  │ 7. Send email ─────┼──────────────────────────┼────▶│  Gmail SMTP      │
+  │ 7. Send email ─────┼──────────────────────────┼────>│  Gmail SMTP      │
   │                    │     │                    │     │                  │
-  │ 8. Cleanup cache ──┼────▶│  Free memory       │     │                  │
-  │ 9. Stop Flask ─────┼────▶│  Container stops   │     │                  │
-  └───────────────────┘     └───────────────────┘     └──────────────────┘
+  │ 8. Cleanup cache ──┼────>│  Free memory       │     │                  │
+  │ 9. Stop Flask ─────┼────>│  Container stops   │     │                  │
+  └────────────────────┘     └────────────────────┘     └──────────────────┘
 
   ═══════════════════════════════════════════════════════════════════════════
   Docker Compose runs both services. The Flask container is started on-demand
