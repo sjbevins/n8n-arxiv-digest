@@ -44,17 +44,17 @@ arXiv Digest is a self-hosted system that automatically:
 3. **Summarizes** the top papers using an LLM of your choice, personalized to your interests
 4. **Emails** a beautifully formatted HTML digest to each subscriber
 
-It supports **multiple subscribers**, each with their own categories, keywords, and email address — all managed from a simple Google Sheet. Add a colleague by adding a row.
+It supports **multiple subscribers**, each with their own categories, keywords, and email address: all managed from a simple Google Sheet. Add a colleague by adding a row.
 
 ### Key Features
 
-- **Any arXiv subfield** — configure categories for physics, CS, math, biology, economics, or any combination
-- **Semantic ranking** — SPECTER2 (trained on scientific papers) ranks papers by relevance to your specific keywords, not just category
-- **LLM summaries** — structured summaries with key results, methods, findings, and relevance to your interests
-- **Flexible LLM backend** — use a cloud API (Anthropic, OpenAI, etc.) or run a local model with Ollama
-- **Multi-subscriber** — one deployment serves an entire lab or reading group
-- **Beautiful emails** — responsive HTML with dark mode support, relevance badges, and paper links
-- **No GPU required** — SPECTER2 runs on CPU; LLM can be cloud-based or local
+- **Any arXiv subfield**: configure categories for physics, CS, math, biology, economics, or any combination
+- **Semantic ranking**: SPECTER2 (trained on scientific papers) ranks papers by relevance to your specific keywords, not just category
+- **LLM summaries**: structured summaries with key results, methods, findings, and relevance to your interests
+- **Flexible LLM backend**: use a cloud API (Anthropic, OpenAI, etc.) or run a local model with Ollama
+- **Multi-subscriber**: one deployment serves an entire lab or reading group
+- **Beautiful emails**: responsive HTML with dark mode support, relevance badges, and paper links
+- **No GPU required**: SPECTER2 runs on CPU; LLM can be cloud-based or local
 
 ---
 
@@ -67,15 +67,15 @@ arXiv provides a [built-in email alert service](https://info.arxiv.org/help/subs
 | **Paper discovery** | All new papers in subscribed categories, unranked | Semantically ranked by relevance to your specific keywords |
 | **Volume** | Every paper in the category (can be 50-100+/day for popular categories like cs.AI) | Top N most relevant papers (default: 10) |
 | **Summaries** | Titles and abstracts only, no summaries | LLM-generated structured summaries (key result, method, findings, relevance) |
-| **Personalization** | Category-level only | Keyword-level — each subscriber gets papers ranked to their specific interests |
+| **Personalization** | Category-level only | Keyword-level: each subscriber gets papers ranked to their specific interests |
 | **Format** | Plain text ASCII email | Responsive HTML with dark mode, relevance badges, direct PDF/abstract links |
 | **Multi-user** | Each person manages their own subscription | One deployment serves everyone; subscribers managed in a shared Google Sheet |
-| **Keyword filtering** | No keyword filtering — you get everything in the category | SPECTER2 semantic embeddings rank papers against your research keywords |
-| **Reading time** | Must scan all titles/abstracts yourself | Pre-ranked and summarized — read the top 10 summaries in minutes |
+| **Keyword filtering** | No keyword filtering: you get everything in the category | SPECTER2 semantic embeddings rank papers against your research keywords |
+| **Reading time** | Must scan all titles/abstracts yourself | Pre-ranked and summarize: read the top 10 summaries in minutes |
 | **Setup** | Send an email to subscribe | Self-hosted with Docker (one-time setup, ~30 minutes) |
 | **Cost** | Free | Free infrastructure + ~$0.02-0.05/day for cloud LLM (or $0 with local Ollama) |
 | **Hosting** | Managed by arXiv | Self-hosted (you control everything) |
-| **Customization** | None | Fully customizable — change models, prompts, schedule, paper count, email format |
+| **Customization** | None | Fully customizable: change models, prompts, schedule, paper count, email format |
 
 **When to use the arXiv mailing list:** You follow a niche category with low volume (< 10 papers/day) and don't mind scanning titles yourself.
 
@@ -86,7 +86,7 @@ arXiv provides a [built-in email alert service](https://info.arxiv.org/help/subs
 ## How It Works
 
 ```
-                         arXiv Digest — System Architecture
+                         arXiv Digest System Architecture
   ═══════════════════════════════════════════════════════════════════════════
 
   TRIGGER (Daily cron or manual)
@@ -130,15 +130,15 @@ arXiv provides a [built-in email alert service](https://info.arxiv.org/help/subs
 
 **Step-by-step:**
 
-1. **Trigger** — The workflow runs daily on a cron schedule (default: 5:10 AM) or manually
-2. **Start Flask** — n8n starts the Flask scraper container via the Docker socket API
-3. **Read subscribers** — Fetches the subscriber list from your Google Sheet (name, email, keywords, categories)
-4. **Scrape** — Flask fetches RSS feeds for all unique categories, retrieves full paper metadata from the arXiv API, and computes SPECTER2 embeddings for every abstract
-5. **Score** — For each subscriber, Flask computes cosine similarity between their keyword embedding and each paper's abstract embedding, returning the top 10 most relevant papers
-6. **Summarize** — Each top paper is sent to the LLM with a personalized prompt including the subscriber's name and research interests
-7. **Format** — Summaries are assembled into a responsive HTML email with metrics, relevance badges, and paper links
-8. **Send** — The digest is emailed to the subscriber via Gmail SMTP
-9. **Cleanup** — Flask frees cached papers and embeddings from memory, then n8n stops the Flask container
+1. **Trigger**: The workflow runs daily on a cron schedule (default: 5:10 AM) or manually
+2. **Start Flask**: n8n starts the Flask scraper container via the Docker socket API
+3. **Read subscribers**: Fetches the subscriber list from your Google Sheet (name, email, keywords, categories)
+4. **Scrape**: Flask fetches RSS feeds for all unique categories, retrieves full paper metadata from the arXiv API, and computes SPECTER2 embeddings for every abstract
+5. **Score**: For each subscriber, Flask computes cosine similarity between their keyword embedding and each paper's abstract embedding, returning the top 10 most relevant papers
+6. **Summarize**: Each top paper is sent to the LLM with a personalized prompt including the subscriber's name and research interests
+7. **Format**: Summaries are assembled into a responsive HTML email with metrics, relevance badges, and paper links
+8. **Send**: The digest is emailed to the subscriber via Gmail SMTP
+9. **Cleanup**: Flask frees cached papers and embeddings from memory, then n8n stops the Flask container
 
 ---
 
@@ -148,7 +148,7 @@ Each subscriber receives an HTML email containing:
 
 - **Header** with their name and the date
 - **Profile section** showing their configured categories and keywords
-- **Metrics grid** — papers published, papers in their categories, top papers selected, timing
+- **Metrics grid**: papers published, papers in their categories, top papers selected, timing
 - **Paper cards** for each top paper, including:
   - Rank number and relevance score badge (e.g., "87.3%")
   - Title (linked to arXiv), authors, publication date
@@ -162,7 +162,7 @@ The email supports both light and dark mode via CSS `prefers-color-scheme`.
 
 ## Choose Your LLM
 
-The summarization step is modular — you can use a cloud API or a local model. Choose the approach that fits your needs:
+The summarization step is modular, so you can use a cloud API or a local model. Choose the approach that fits your needs:
 
 ### Option A: Cloud API (Recommended for most users)
 
@@ -191,7 +191,7 @@ Run an open-source model locally using [Ollama](https://ollama.com). Good for pr
 | Pros | Cons |
 |------|------|
 | Completely free after setup | Requires a capable machine (GPU recommended) |
-| Full privacy — nothing leaves your network | Slower than cloud APIs without a GPU |
+| Full privacy, nothing leaves your network | Slower than cloud APIs without a GPU |
 | No API keys or accounts needed | You manage model updates and maintenance |
 | Works offline | Summarization quality depends on model choice |
 
@@ -234,9 +234,9 @@ See [Step 6B](#step-6b-local-model-with-ollama) for the full walkthrough.
 
 - A **Linux server** (Ubuntu 22.04+ recommended) or any machine that can run Docker
 - **Docker Engine** and **Docker Compose** plugin (not Docker Desktop)
-- A **Google Cloud** project (free tier is fine — for Google Sheets OAuth2)
+- A **Google Cloud** project (free tier is fine for Google Sheets OAuth2)
 - A **Gmail** account with 2-Step Verification enabled (for App Password)
-- An **LLM backend** — either a cloud API key or Ollama installed locally
+- An **LLM backend**: either a cloud API key or Ollama installed locally
 - **~2 GB RAM** minimum (SPECTER2 uses ~500 MB when loaded)
   - If using Ollama locally, add RAM/VRAM for the model (4-20+ GB depending on model size)
 
@@ -315,7 +315,7 @@ The n8n container needs access to the Docker socket to start and stop the Flask 
 getent group docker | cut -d: -f3
 ```
 
-This will output a number like `988`, `999`, or `998`. Note it down — you'll need it for `.env`.
+This will output a number like `988`, `999`, or `998`. Note it down, you'll need it for `.env`.
 
 ---
 
@@ -351,7 +351,7 @@ hostname -I | awk '{print $1}'
 
 Then set `WEBHOOK_URL=http://192.168.1.50.nip.io:5678/`
 
-The `.nip.io` suffix is a free wildcard DNS service — `192.168.1.50.nip.io` resolves to `192.168.1.50`. This is needed because Google's OAuth2 won't accept bare IP addresses as redirect URIs.
+The `.nip.io` suffix is a free wildcard DNS service, `192.168.1.50.nip.io` resolves to `192.168.1.50`. This is needed because Google's OAuth2 won't accept bare IP addresses as redirect URIs.
 
 ---
 
@@ -367,7 +367,7 @@ You need a Gmail App Password so n8n can send emails via SMTP. Your regular Gmai
 5. Enter app name: `n8n`
 6. Click **"Create"**
 7. Copy the **16-character password** (e.g., `abcd efgh ijkl mnop`)
-   - Save this somewhere safe — you won't see it again
+   - Save this somewhere safe, you won't see it again
    - You'll enter it in n8n later (Step 10)
 
 ---
@@ -426,7 +426,7 @@ This is the most involved step. n8n needs OAuth2 credentials to read your Google
    ```
    Replace `YOUR_LAN_IP` with your actual LAN IP (same one from your `WEBHOOK_URL`).
 6. Click **"Create"**
-7. A popup shows your **Client ID** and **Client Secret** — copy both
+7. A popup shows your **Client ID** and **Client Secret**, copy both
    - You'll enter these in n8n later (Step 10)
 
 ---
@@ -444,7 +444,7 @@ Choose one of the two options below.
 5. Copy the key (starts with `sk-ant-...`)
    - You'll enter it in n8n later (Step 10)
 
-The included workflow is pre-configured to use Claude Haiku 4.5 (fast and inexpensive). You can change the model later — see [Changing the LLM Model](#changing-the-llm-model).
+The included workflow is pre-configured to use Claude Haiku 4.5 (fast and inexpensive). You can change the model later: see [Changing the LLM Model](#changing-the-llm-model).
 
 > **Using a different API provider?** n8n has built-in nodes for OpenAI, Google Gemini, Azure OpenAI, Mistral, and others. You can swap the LLM node in the workflow to use any supported provider. The rest of the pipeline stays the same.
 
@@ -496,11 +496,11 @@ The included workflow is pre-configured to use Claude Haiku 4.5 (fast and inexpe
 
 **Column details:**
 
-- **Name** — Used in the email greeting and in the LLM prompt for personalization
-- **Email** — Where the digest will be sent
-- **Keywords** — Comma-separated research interests. These are embedded with SPECTER2 and compared against paper abstracts. Be specific — `"transformer architecture, attention mechanisms, large language models"` works better than just `"AI"`
-- **Categories** — Comma-separated arXiv categories to scrape. See the [arXiv category taxonomy](https://arxiv.org/category_taxonomy) for the full list. Common categories are listed in the [Configuration Reference](#arxiv-categories) section below.
-- **Status** — Set to `active` to receive digests. Set to anything else (e.g., `inactive`, `paused`) to skip
+- **Name**: Used in the email greeting and in the LLM prompt for personalization
+- **Email**: Where the digest will be sent
+- **Keywords**: Comma-separated research interests. These are embedded with SPECTER2 and compared against paper abstracts. Be specific: `"transformer architecture, attention mechanisms, large language models"` works better than just `"AI"`
+- **Categories**: Comma-separated arXiv categories to scrape. See the [arXiv category taxonomy](https://arxiv.org/category_taxonomy) for the full list. Common categories are listed in the [Configuration Reference](#arxiv-categories) section below.
+- **Status**: Set to `active` to receive digests. Set to anything else (e.g., `inactive`, `paused`) to skip
 
 5. Copy your **Google Sheet ID** from the URL:
    ```
@@ -628,7 +628,7 @@ Open the workflow in the n8n editor. You need to update several nodes with your 
 1. Click the **"Send Personalized Email"** node
 2. Under **Credential to connect with**, select your SMTP credential
 3. Change **From Email** to your Gmail address
-4. Close the node (the To Email is dynamic — it reads from your Google Sheet)
+4. Close the node (the To Email is dynamic, it reads from your Google Sheet)
 
 #### LLM Model Node
 
@@ -636,7 +636,7 @@ Open the workflow in the n8n editor. You need to update several nodes with your 
 
 1. Click the **"Claude Model"** node
 2. Under **Credential to connect with**, select your Anthropic credential
-3. Optionally change the model (default: Claude Haiku 4.5 — see [Changing the LLM Model](#changing-the-llm-model))
+3. Optionally change the model (default: Claude Haiku 4.5, see [Changing the LLM Model](#changing-the-llm-model))
 4. Close the node
 
 **If using Ollama (local model):**
@@ -659,7 +659,7 @@ Click **"Save"** in the top-right corner.
 ### Step 12: Test
 
 1. In the n8n workflow editor, click **"Test Workflow"** (this triggers the manual path)
-2. Watch the execution progress through each node — you can click nodes to see their output
+2. Watch the execution progress through each node, you can click nodes to see their output
 3. Check your email for the digest
 4. If everything works, **activate the workflow** by toggling the switch in the top-right corner
 
@@ -815,7 +815,7 @@ Just edit your Google Sheet:
 - **Pause** a subscriber by changing Status to `inactive`
 - **Remove** by deleting the row
 
-Changes take effect on the next workflow run — no restart needed.
+Changes take effect on the next workflow run, no restart needed.
 
 ---
 
@@ -1001,7 +1001,7 @@ Subsequent runs will be much faster since the model is cached.
 If using Ollama and the workflow can't connect:
 
 1. Make sure Ollama is running on the host: `curl http://localhost:11434/api/tags`
-2. The n8n container reaches the host via `host.docker.internal` — verify your Ollama credential URL is set to `http://host.docker.internal:11434`
+2. The n8n container reaches the host via `host.docker.internal`, verify your Ollama credential URL is set to `http://host.docker.internal:11434`
 3. On some Linux systems, `host.docker.internal` may not resolve. Add this to the n8n service in `docker-compose.yml`:
    ```yaml
    extra_hosts:
@@ -1042,7 +1042,7 @@ The Flask scraper loads a ~500 MB ML model into RAM. Rather than keeping it runn
 
 ### Why Google Sheets?
 
-A Google Sheet is the simplest possible "database" for subscriber management. Adding a colleague is as easy as adding a row — no admin panel or API calls needed. It also makes it easy to share subscriber management with others in your lab.
+A Google Sheet is the simplest possible "database" for subscriber management. Adding a colleague is as easy as adding a row, no admin panel or API calls needed. It also makes it easy to share subscriber management with others in your lab.
 
 ---
 
