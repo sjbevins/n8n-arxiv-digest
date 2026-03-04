@@ -102,7 +102,7 @@ arXiv provides a [built-in email alert service](https://info.arxiv.org/help/subs
   │ 2. Read subscriber─┼──────────────────────────┼────>│  Google Sheets   │
   │    list            │<─────────────────────────┼─────│  (subscribers)   │
   │                    │     │                    │     │                  │
-  │ 3. Scrape papers ──┼───> │  Fetch RSS feeds ─┼─────>│  arXiv RSS       │
+  │ 3. Scrape papers ──┼───> │  Fetch RSS feeds ──┼────>│  arXiv RSS       │
   │    (all categories)│     │  Fetch metadata  ──┼────>│  arXiv API       │
   │                    │<────┼  Compute SPECTER2  │     │                  │
   │                    │     │  embeddings (CPU)  │     │                  │
