@@ -42,7 +42,7 @@ arXiv Digest is a self-hosted system that automatically:
 1. **Scrapes** new papers from your chosen arXiv categories daily
 2. **Ranks** them by semantic similarity to your research keywords using [SPECTER2](https://huggingface.co/allenai/specter2_base) embeddings
 3. **Summarizes** the top papers using an LLM of your choice, personalized to your interests
-4. **Emails** a beautifully formatted HTML digest to each subscriber
+4. **Emails** a formatted HTML digest to each subscriber
 
 It supports **multiple subscribers**, each with their own categories, keywords, and email address: all managed from a simple Google Sheet. Add a colleague by adding a row.
 
@@ -53,7 +53,7 @@ It supports **multiple subscribers**, each with their own categories, keywords, 
 - **LLM summaries**: structured summaries with key results, methods, findings, and relevance to your interests
 - **Flexible LLM backend**: use a cloud API (Anthropic, OpenAI, etc.) or run a local model with Ollama
 - **Multi-subscriber**: one deployment serves an entire lab or reading group
-- **Beautiful emails**: responsive HTML with dark mode support, relevance badges, and paper links
+- **Cool emails**: responsive HTML with dark mode support, relevance badges, and paper links
 - **No GPU required**: SPECTER2 runs on CPU; LLM can be cloud-based or local
 
 ---
